@@ -14,7 +14,6 @@ import tensorflow as tf
 from six.moves import xrange
 import os
 from scipy import misc
-mask_path = 'data/grills_64/mask.bmp'
 from ops import *
 from utils import *
 
