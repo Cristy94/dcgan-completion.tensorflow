@@ -1,3 +1,6 @@
+# Changes from the original repository
+- added custom mask for each training sample
+- added image random flip for data augmentation
 # Image Completion with Deep Learning in TensorFlow
 
 ![](/completion.compressed.gif)
