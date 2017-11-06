@@ -12,7 +12,9 @@ import itertools
 from glob import glob
 import tensorflow as tf
 from six.moves import xrange
-
+import os
+from scipy import misc
+mask_path = 'data/grills_64/mask.bmp'
 from ops import *
 from utils import *
 
@@ -29,7 +31,7 @@ class DCGAN(object):
                  batch_size=64, sample_size=64, lowres=8,
                  z_dim=100, gf_dim=64, df_dim=64,
                  gfc_dim=1024, dfc_dim=1024, c_dim=3,
-                 checkpoint_dir=None, lam=0.1):
+                 checkpoint_dir=None, lam=0.1, flip=False):
         """
 
         Args:
@@ -66,6 +68,7 @@ class DCGAN(object):
         self.dfc_dim = dfc_dim
 
         self.lam = lam
+        self.flip = flip
 
         self.c_dim = c_dim
 
@@ -130,11 +133,11 @@ class DCGAN(object):
         self.saver = tf.train.Saver(max_to_keep=1)
 
         # Completion.
-        self.mask = tf.placeholder(tf.float32, self.image_shape, name='mask')
+        self.masks = tf.placeholder(tf.float32, [None] + self.image_shape, name='masks')
         self.lowres_mask = tf.placeholder(tf.float32, self.lowres_shape, name='lowres_mask')
         self.contextual_loss = tf.reduce_sum(
             tf.contrib.layers.flatten(
-                tf.abs(tf.multiply(self.mask, self.G) - tf.multiply(self.mask, self.images))), 1)
+                tf.abs(tf.multiply(self.masks, self.G) - tf.multiply(self.masks, self.images))), 1)
         self.contextual_loss += tf.reduce_sum(
             tf.contrib.layers.flatten(
                 tf.abs(tf.multiply(self.lowres_mask, self.lowres_G) - tf.multiply(self.lowres_mask, self.lowres_images))), 1)
@@ -200,7 +203,7 @@ Initializing a new one.
 
             for idx in xrange(0, batch_idxs):
                 batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
-                batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop)
+                batch = [self.transformImage(get_image(batch_file, self.image_size, is_crop=self.is_crop))
                          for batch_file in batch_files]
                 batch_images = np.array(batch).astype(np.float32)
 
@@ -282,6 +285,8 @@ Initializing a new one.
             mask[:,:c,:] = 0.0
         elif config.maskType == 'full':
             mask = np.ones(self.image_shape)
+        elif config.maskType == 'custom':
+            mask = np.ones(self.image_shape)
         elif config.maskType == 'grid':
             mask = np.zeros(self.image_shape)
             mask[::4,::4,:] = 1.0
@@ -299,6 +304,9 @@ Initializing a new one.
             batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop)
                      for batch_file in batch_files]
             batch_images = np.array(batch).astype(np.float32)
+            masks = [(misc.imread(batch_file.replace('val_64', 'val_64_masks'), flatten = 0) / 255)
+                        for batch_file in batch_files]
+            batch_masks = np.array(masks).astype(np.float32)
             if batchSz < self.batch_size:
                 print(batchSz)
                 padSz = ((0, int(self.batch_size-batchSz)), (0,0), (0,0), (0,0))
@@ -313,7 +321,7 @@ Initializing a new one.
             nCols = min(8, batchSz)
             save_images(batch_images[:batchSz,:,:,:], [nRows,nCols],
                         os.path.join(config.outDir, 'before.png'))
-            masked_images = np.multiply(batch_images, mask)
+            masked_images = np.multiply(batch_images, batch_masks)
             save_images(masked_images[:batchSz,:,:,:], [nRows,nCols],
                         os.path.join(config.outDir, 'masked.png'))
             if lowres_mask.any():
@@ -332,7 +340,7 @@ Initializing a new one.
             for i in xrange(config.nIter):
                 fd = {
                     self.z: zhats,
-                    self.mask: mask,
+                    self.masks: batch_masks,
                     self.lowres_mask: lowres_mask,
                     self.images: batch_images,
                     self.is_training: False
@@ -358,7 +366,7 @@ Initializing a new one.
                                               self.lowres, 1), self.lowres, 2),
                                     [nRows,nCols], imgName)
 
-                    inv_masked_hat_images = np.multiply(G_imgs, 1.0-mask)
+                    inv_masked_hat_images = np.multiply(G_imgs, 1.0-batch_masks)
                     completed = masked_images + inv_masked_hat_images
                     imgName = os.path.join(config.outDir,
                                            'completed/{:04d}.png'.format(i))
@@ -463,3 +471,14 @@ Initializing a new one.
             return True
         else:
             return False
+
+    def transformImage(self, image):
+        r = image
+
+        if self.flip and random.random() < 0.5:
+            r = np.fliplr(r)
+
+        if self.flip and random.random() < 0.1:
+            r = np.flipud(r)
+
+        return r

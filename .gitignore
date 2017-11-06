@@ -3,4 +3,6 @@ samples
 checkpoint
 data
 __pycache__
+completions
 out
+checkpoint*

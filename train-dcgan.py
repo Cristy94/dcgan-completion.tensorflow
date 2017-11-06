@@ -23,6 +23,8 @@ flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
 flags.DEFINE_integer("image_size", 64, "The size of image to use")
 flags.DEFINE_string("dataset", "lfw-aligned-64", "Dataset directory.")
+flags.DEFINE_integer("f_dim", 64, "Dimension of first conv layer filters [64]");
+flags.DEFINE_integer("flip", 0, "Weather to flip the training image or not.");
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
 FLAGS = flags.FLAGS
@@ -35,7 +37,7 @@ if not os.path.exists(FLAGS.sample_dir):
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
-    dcgan = DCGAN(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size,
-                  is_crop=False, checkpoint_dir=FLAGS.checkpoint_dir)
+    dcgan = DCGAN(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size,sample_size=FLAGS.batch_size,
+                  is_crop=False, gf_dim=FLAGS.f_dim, df_dim=FLAGS.f_dim, checkpoint_dir=FLAGS.checkpoint_dir, flip=FLAGS.flip)
 
     dcgan.train(FLAGS)
